@@ -7,7 +7,7 @@
 
 // ================== Initial Wi-Fi Credentials (Seed) ==================
 const char* ssid_seed     = "wenwen 的 S24 Ultra"; // Fallback Wi-Fi SSID
-const char* password_seed = "********";           // Fallback Wi-Fi Password
+const char* password_seed = "********";            // Fallback Wi-Fi Password
 
 // ================== MQTT Settings ==================
 const char* MQTTServer   = "broker.MQTTGO.io";
@@ -30,7 +30,9 @@ const char* MQTT_PUB_ACK  = "ShangHuYun/DEoP/Pub/ack";
 
 // -- REC (ISD1820) --
 #define REC_PIN   3
-#define PLAYE_PIN 7 // Changed from PLAYL_PIN for clarity, connected to PLAYE
+#define PLAYE_PIN 7 // Connected to PLAYE (edge-trigger)
+
+#define PLAYBACK_INTERVAL_MS 10000 // Default 10 seconds interval
 
 // ================== Objects ==================
 WiFiClient   WifiClient;
@@ -46,10 +48,12 @@ String led_mode = "off";
 unsigned long led_last_update = 0;
 int rainbow_hue = 0;
 
-// -- REC Software Loop State --
+// -- REC Software Loop State (count-controlled or infinite) --
 bool isPlaybackLooping = false;
+bool playbackInfinite = false;
+uint32_t playbackRemaining = 0;           // >0 means remaining plays for finite mode
 unsigned long lastPlaybackTriggerTime = 0;
-const unsigned long PLAYBACK_INTERVAL_MS = 10000; // 10 seconds, as requested
+unsigned long playbackIntervalMs = 10000; // default 10s; can be overridden via MQTT
 
 // -- Wi-Fi NVS --
 const char* PREF_NAMESPACE = "wifi_cfg";
@@ -57,7 +61,6 @@ const char* PREF_KEY       = "networks";
 const uint8_t WIFI_MAX = 5; // Max number of Wi-Fi networks to store
 const size_t JSON_CAPACITY =
   JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(WIFI_MAX) + WIFI_MAX * JSON_OBJECT_SIZE(2) + 256;
-
 
 // ================== Function Declarations ==================
 // -- MQTT & Wi-Fi --
@@ -81,7 +84,6 @@ void led_update();
 void rainbow_cycle(int wait_ms);
 uint32_t ColorWheel(byte WheelPos);
 
-
 // ================== setup ==================
 void setup() {
   Serial.begin(115200);
@@ -101,7 +103,8 @@ void setup() {
   // -- Wi-Fi Initialization --
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
-  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+  
+  
   randomSeed(esp_random());
   prefs.begin(PREF_NAMESPACE, false);
   ensureSeedIfEmpty();
@@ -135,19 +138,30 @@ void loop() {
   // -- Handle dynamic LED effects --
   led_update();
 
-  // -- Handle REC software loop playback --
+  // -- Handle REC software loop playback (count-controlled / infinite) --
   if (isPlaybackLooping) {
-    if (millis() - lastPlaybackTriggerTime > PLAYBACK_INTERVAL_MS) {
-      // Time to trigger the next playback
-      Serial.println("[REC] Triggering next playback in software loop...");
+    if (millis() - lastPlaybackTriggerTime > playbackIntervalMs) {
+      // Trigger one playback pulse on PLAYE (edge-triggered)
+      Serial.println("[REC] Trigger playback (loop)...");
       digitalWrite(PLAYE_PIN, HIGH);
-      delay(50); // A short pulse is enough for edge-trigger
+      delay(50); // Short pulse is enough
       digitalWrite(PLAYE_PIN, LOW);
-      lastPlaybackTriggerTime = millis(); // Reset the timer
+      lastPlaybackTriggerTime = millis();
+
+      if (!playbackInfinite) {
+        if (playbackRemaining > 0) {
+          playbackRemaining--;
+        }
+        if (playbackRemaining == 0) {
+          // Finished finite sequence
+          isPlaybackLooping = false;
+          publishAck(true, "playback_completed");
+          Serial.println("[REC] Playback finished (count reached).");
+        }
+      }
     }
   }
 }
-
 
 // ================== Main Functionality ==================
 
@@ -220,8 +234,8 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
     if (action == "set_mode") {
       led_mode = d["mode"].as<String>();
       if (led_mode == "off") {
-          pixels.clear();
-          pixels.show();
+        pixels.clear();
+        pixels.show();
       }
       publishAck(true, "led_mode_set_to_" + led_mode);
     } else if (action == "set_color") {
@@ -252,19 +266,58 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
       digitalWrite(REC_PIN, (status == "start") ? HIGH : LOW);
       msg = (status == "start") ? "record_started" : "record_stopped";
     } else if (action == "playback") {
-        if (status == "start") {
-            isPlaybackLooping = true;
-            // Trigger the first playback immediately
-            Serial.println("[REC] Triggering first playback in software loop...");
-            digitalWrite(PLAYE_PIN, HIGH);
-            delay(50); // Short pulse
-            digitalWrite(PLAYE_PIN, LOW);
-            lastPlaybackTriggerTime = millis();
-            msg = "playback_loop_started";
-        } else { // "stop" or any other status
-            isPlaybackLooping = false;
-            msg = "playback_loop_stopped";
+      if (status == "start") {
+        // Optional parameters: count, interval_ms
+        // count: 0 or omitted -> infinite; 1 -> once; N>1 -> N times
+        uint32_t count = d["count"] | 0;
+        uint32_t interval = d["interval_ms"] | playbackIntervalMs;
+        if (interval < 250) interval = 250; // safety lower bound
+
+        playbackIntervalMs = interval;
+
+        if (count == 0) {
+          playbackInfinite = true;
+          playbackRemaining = 0;
+        } else {
+          playbackInfinite = false;
+          playbackRemaining = count; // will decrement after first immediate trigger
         }
+
+        // Start loop and trigger first playback immediately
+        isPlaybackLooping = true;
+
+        Serial.printf("[REC] Start playback: %s, interval=%lu ms, count=%lu\n",
+                      playbackInfinite ? "infinite" : "finite",
+                      (unsigned long)playbackIntervalMs,
+                      (unsigned long)(playbackInfinite ? 0 : playbackRemaining));
+
+        // First immediate trigger
+        digitalWrite(PLAYE_PIN, HIGH);
+        delay(50);
+        digitalWrite(PLAYE_PIN, LOW);
+        lastPlaybackTriggerTime = millis();
+
+        if (!playbackInfinite) {
+          if (playbackRemaining > 0) playbackRemaining--;
+          if (playbackRemaining == 0) {
+            // count == 1 -> single shot
+            isPlaybackLooping = false;
+            msg = "playback_once_done";
+            publishAck(true, msg);
+            return;
+          }
+        }
+
+        msg = playbackInfinite ? "playback_loop_started_infinite" : "playback_loop_started";
+      } else if (status == "stop") {
+        isPlaybackLooping = false;
+        playbackInfinite = false;
+        playbackRemaining = 0;
+        msg = "playback_loop_stopped";
+      } else {
+        success = false;
+        msg = "rec_unknown_status";
+      }
     } else {
       success = false;
       msg = "rec_unknown_action";
@@ -275,15 +328,12 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 // ---------- LED Dynamic Effects ----------
-
-// Input a value 0 to 255 to get a color value.
-// The colours are a transition r - g - b - back to r.
 uint32_t ColorWheel(byte WheelPos) {
   WheelPos = 255 - WheelPos;
-  if(WheelPos < 85) {
+  if (WheelPos < 85) {
     return pixels.Color(255 - WheelPos * 3, 0, WheelPos * 3);
   }
-  if(WheelPos < 170) {
+  if (WheelPos < 170) {
     WheelPos -= 85;
     return pixels.Color(0, WheelPos * 3, 255 - WheelPos * 3);
   }
@@ -301,19 +351,17 @@ void led_update() {
 }
 
 void rainbow_cycle(int wait_ms) {
-  for(int i=0; i< NUM_PIXELS; i++) {
+  for (int i = 0; i < NUM_PIXELS; i++) {
     pixels.setPixelColor(i, ColorWheel(((i * 256 / NUM_PIXELS) + rainbow_hue) & 255));
   }
   pixels.show();
   rainbow_hue++;
-  if (rainbow_hue >= 256*5) { // Let the rainbow cycle a few times
+  if (rainbow_hue >= 256 * 5) { // Let the rainbow cycle a few times
     rainbow_hue = 0;
   }
 }
 
-
 // ================== Connection Management (Wi-Fi & MQTT) ==================
-
 void publishAck(bool ok, const String& msg) {
   DynamicJsonDocument doc(256);
   doc["ok"] = ok;
@@ -339,7 +387,7 @@ void MQTTConnecte() {
     } else {
       Serial.print("MQTT connection failed, rc=");
       Serial.println(MQTTClient.state());
-      uint32_t backoff = 1000UL << min((uint8_t)2, attempt++);
+      uint32_t backoff = 1000UL << std::min<uint8_t>(2, attempt++);
       Serial.printf("Retrying in %lu ms\n", backoff);
       delay(backoff);
     }
@@ -360,7 +408,7 @@ void tryConnectSaved(uint32_t perAttemptTimeoutMs) {
   if (!loadNetworks(json)) {
     Serial.println("[WiFi] Failed to load network list, trying seed credentials...");
     WiFi.begin(ssid_seed, password_seed);
-    uint32_t start = millis(); while(millis() - start < perAttemptTimeoutMs && WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+    uint32_t start = millis(); while (millis() - start < perAttemptTimeoutMs && WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
     if (WiFi.status() == WL_CONNECTED) { Serial.print("\n[WiFi] Connected with seed credentials. IP: "); Serial.println(WiFi.localIP()); }
     return;
   }
@@ -369,7 +417,7 @@ void tryConnectSaved(uint32_t perAttemptTimeoutMs) {
   if (deserializeJson(doc, json)) {
     Serial.println("[WiFi] JSON parse failed, trying seed credentials...");
     WiFi.begin(ssid_seed, password_seed);
-    uint32_t start = millis(); while(millis() - start < perAttemptTimeoutMs && WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+    uint32_t start = millis(); while (millis() - start < perAttemptTimeoutMs && WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
     if (WiFi.status() == WL_CONNECTED) { Serial.print("\n[WiFi] Connected with seed credentials. IP: "); Serial.println(WiFi.localIP()); }
     return;
   }
@@ -378,7 +426,7 @@ void tryConnectSaved(uint32_t perAttemptTimeoutMs) {
   if (arr.isNull() || arr.size() == 0) {
     Serial.println("[WiFi] Network list is empty, trying seed credentials...");
     WiFi.begin(ssid_seed, password_seed);
-    uint32_t start = millis(); while(millis() - start < perAttemptTimeoutMs && WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+    uint32_t start = millis(); while (millis() - start < perAttemptTimeoutMs && WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
     if (WiFi.status() == WL_CONNECTED) { Serial.print("\n[WiFi] Connected with seed credentials. IP: "); Serial.println(WiFi.localIP()); }
     return;
   }
@@ -391,7 +439,7 @@ void tryConnectSaved(uint32_t perAttemptTimeoutMs) {
 
     Serial.print("[WiFi] Connecting to: "); Serial.println(s);
     WiFi.begin(s, p);
-    uint32_t start = millis(); while(millis() - start < perAttemptTimeoutMs && WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+    uint32_t start = millis(); while (millis() - start < perAttemptTimeoutMs && WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
     Serial.println();
 
     if (WiFi.status() == WL_CONNECTED) {
@@ -443,9 +491,7 @@ bool tryConnectOpenAP(uint32_t perAttemptTimeoutMs) {
   return false;
 }
 
-
 // ================== NVS / JSON Wi-Fi Utility Functions ==================
-
 void ensureSeedIfEmpty() {
   if (!prefs.isKey(PREF_KEY) || prefs.getString(PREF_KEY, "").length() < 15) {
     DynamicJsonDocument d(JSON_CAPACITY);
