@@ -20,8 +20,10 @@ const char* MQTT_WIFI_CMD = "ShangHuYun/DEoP/Sub/wifi/control";
 const char* MQTT_LED_CMD  = "ShangHuYun/DEoP/Sub/led/control";
 const char* MQTT_REC_CMD  = "ShangHuYun/DEoP/Sub/rec/control";
 
-// Response Topic
-const char* MQTT_PUB_ACK  = "ShangHuYun/DEoP/Pub/ack";
+// Response Topics
+const char* MQTT_WIFI_ACK = "ShangHuYun/DEoP/Sub/wifi/ack";
+const char* MQTT_LED_ACK  = "ShangHuYun/DEoP/Sub/led/ack";
+const char* MQTT_REC_ACK  = "ShangHuYun/DEoP/Sub/rec/ack";
 
 // ================== Hardware Definitions ==================
 // -- LED (NeoPixel) --
@@ -67,7 +69,7 @@ const size_t JSON_CAPACITY =
 void MQTTCallback(char* topic, byte* payload, unsigned int length);
 void WifiConnecte();
 void MQTTConnecte();
-void publishAck(bool ok, const String& msg);
+void publishAck(const char* topic, bool ok, const String& msg);
 
 // -- Wi-Fi Tools --
 void ensureSeedIfEmpty();
@@ -103,6 +105,7 @@ void setup() {
   // -- Wi-Fi Initialization --
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
   
   
   randomSeed(esp_random());
@@ -155,7 +158,7 @@ void loop() {
         if (playbackRemaining == 0) {
           // Finished finite sequence
           isPlaybackLooping = false;
-          publishAck(true, "playback_completed");
+          publishAck(MQTT_REC_ACK, true, "playback_completed");
           Serial.println("[REC] Playback finished (count reached).");
         }
       }
@@ -176,7 +179,8 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
   DynamicJsonDocument d(512);
   auto err = deserializeJson(d, s);
   if (err) {
-    publishAck(false, String("json_error: ") + err.c_str());
+    // Use WIFI_ACK as default for JSON errors
+    publishAck(MQTT_WIFI_ACK, false, String("json_error: ") + err.c_str());
     return;
   }
 
@@ -191,18 +195,18 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
       bool updateOnly = (action == "set");
       String reason;
       bool ok = addOrUpdateNetwork(ssid, pwd, updateOnly, reason);
-      publishAck(ok, reason);
+      publishAck(MQTT_WIFI_ACK, ok, reason);
       return;
     }
     if (action == "del") {
       String ssid = d["ssid"] | "";
       bool ok = deleteNetwork(ssid);
-      publishAck(ok, ok ? "deleted" : "delete_failed");
+      publishAck(MQTT_WIFI_ACK, ok, ok ? "deleted" : "delete_failed");
       return;
     }
     if (action == "clear") {
       bool ok = clearNetworks();
-      publishAck(ok, ok ? "cleared" : "clear_failed");
+      publishAck(MQTT_WIFI_ACK, ok, ok ? "cleared" : "clear_failed");
       return;
     }
     if (action == "list") {
@@ -214,15 +218,15 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
       JsonObject msg_obj = final_doc.createNestedObject("msg");
       msg_obj["networks"] = src["networks"];
       String final_out; serializeJson(final_doc, final_out);
-      MQTTClient.publish(MQTT_PUB_ACK, final_out.c_str(), false);
+      MQTTClient.publish(MQTT_WIFI_ACK, final_out.c_str(), false);
       return;
     }
     if (action == "apply") {
       needReconnectApply = true;
-      publishAck(true, "apply_requested");
+      publishAck(MQTT_WIFI_ACK, true, "apply_requested");
       return;
     }
-    publishAck(false, "wifi_unknown_action");
+    publishAck(MQTT_WIFI_ACK, false, "wifi_unknown_action");
     return;
   }
 
@@ -237,7 +241,7 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
         pixels.clear();
         pixels.show();
       }
-      publishAck(true, "led_mode_set_to_" + led_mode);
+      publishAck(MQTT_LED_ACK, true, "led_mode_set_to_" + led_mode);
     } else if (action == "set_color") {
       led_mode = "solid";
       uint8_t r = d["r"] | 0;
@@ -245,9 +249,9 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
       uint8_t b = d["b"] | 0;
       pixels.fill(pixels.Color(r, g, b));
       pixels.show();
-      publishAck(true, "led_color_set");
+      publishAck(MQTT_LED_ACK, true, "led_color_set");
     } else {
-      publishAck(false, "led_unknown_action");
+      publishAck(MQTT_LED_ACK, false, "led_unknown_action");
     }
     return;
   }
@@ -303,7 +307,7 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
             // count == 1 -> single shot
             isPlaybackLooping = false;
             msg = "playback_once_done";
-            publishAck(true, msg);
+            publishAck(MQTT_REC_ACK, true, msg);
             return;
           }
         }
@@ -322,7 +326,7 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
       success = false;
       msg = "rec_unknown_action";
     }
-    publishAck(success, msg);
+    publishAck(MQTT_REC_ACK, success, msg);
     return;
   }
 }
@@ -362,12 +366,12 @@ void rainbow_cycle(int wait_ms) {
 }
 
 // ================== Connection Management (Wi-Fi & MQTT) ==================
-void publishAck(bool ok, const String& msg) {
+void publishAck(const char* topic, bool ok, const String& msg) {
   DynamicJsonDocument doc(256);
   doc["ok"] = ok;
   doc["msg"] = msg;
   String out; serializeJson(doc, out);
-  MQTTClient.publish(MQTT_PUB_ACK, out.c_str(), false);
+  MQTTClient.publish(topic, out.c_str(), false);
 }
 
 void MQTTConnecte() {
@@ -382,7 +386,7 @@ void MQTTConnecte() {
       MQTTClient.subscribe(MQTT_WIFI_CMD);
       MQTTClient.subscribe(MQTT_LED_CMD);
       MQTTClient.subscribe(MQTT_REC_CMD);
-      publishAck(true, "mqtt_connected");
+      publishAck(MQTT_WIFI_ACK, true, "mqtt_connected");
       break;
     } else {
       Serial.print("MQTT connection failed, rc=");
