@@ -3,23 +3,26 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/mobile_navigation"
-    app:startDestination="@+id/navigation_home">
+    app:startDestination="@id/navigation_home">
 
+    <!-- Wi-Fi 控制 -->
     <fragment
         android:id="@+id/navigation_home"
-        android:name="com.example.myapplication.ui.home.HomeFragment"
-        android:label="@string/title_home"
-        tools:layout="@layout/fragment_home" />
+        android:name="com.example.myapplication.ui.WifiFragment"
+        android:label="Wi-Fi"
+        tools:layout="@layout/fragment_wifi" />
 
+    <!-- LED 控制 -->
     <fragment
         android:id="@+id/navigation_dashboard"
-        android:name="com.example.myapplication.ui.dashboard.DashboardFragment"
-        android:label="@string/title_dashboard"
-        tools:layout="@layout/fragment_dashboard" />
+        android:name="com.example.myapplication.ui.LedFragment"
+        android:label="LED"
+        tools:layout="@layout/fragment_led" />
 
+    <!-- 錄音/播放 控制 -->
     <fragment
         android:id="@+id/navigation_notifications"
-        android:name="com.example.myapplication.ui.notifications.NotificationsFragment"
-        android:label="@string/title_notifications"
-        tools:layout="@layout/fragment_notifications" />
+        android:name="com.example.myapplication.ui.RecFragment"
+        android:label="REC"
+        tools:layout="@layout/fragment_rec" />
 </navigation>
