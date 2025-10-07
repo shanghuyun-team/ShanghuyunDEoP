@@ -69,7 +69,7 @@ void publishAck(bool ok, const String& msg);
 void ensureSeedIfEmpty();
 bool loadNetworks(String& jsonOut);
 bool saveNetworks(const String& jsonIn);
-bool addOrUpdateNetwork(const String& ssid, const String& password, bool updateOnly, String& reason);
+bool addOrUpdateNetwork(const String& ssid, const String& password, String& reason);
 bool deleteNetwork(const String& ssid);
 bool clearNetworks();
 void tryConnectSaved(uint32_t perAttemptTimeoutMs = 12000);
@@ -160,9 +160,8 @@ void MQTTCallback(char* topic, byte* payload, unsigned int length) {
     if (action == "add" || action == "set") {
       String ssid = d["ssid"] | "";
       String pwd  = d["password"] | "";
-      bool updateOnly = (action == "set");
       String reason;
-      bool ok = addOrUpdateNetwork(ssid, pwd, updateOnly, reason);
+      bool ok = addOrUpdateNetwork(ssid, pwd, reason);
       publishAck(ok, reason);
       return;
     }
@@ -440,10 +439,12 @@ bool loadNetworks(String& jsonOut) {
 }
 
 bool saveNetworks(const String& jsonIn) {
-  return prefs.putString(PREF_KEY, jsonIn) > 0;
+  bool res = prefs.putString(PREF_KEY, jsonIn) > 0;
+  if(res) needReconnectApply = true;
+  return res;
 }
 
-bool addOrUpdateNetwork(const String& ssid, const String& password, bool updateOnly, String& reason) {
+bool addOrUpdateNetwork(const String& ssid, const String& password, String& reason) {
   if (ssid.length() == 0) { reason = "empty_ssid"; return false; }
   String json; loadNetworks(json);
   DynamicJsonDocument doc(JSON_CAPACITY);
@@ -460,8 +461,9 @@ bool addOrUpdateNetwork(const String& ssid, const String& password, bool updateO
     }
   }
 
-  if (updateOnly) { reason = "not_found"; return false; }
-  if (arr.size() >= WIFI_MAX) { reason = "full"; return false; }
+  if (arr.size() >= WIFI_MAX) { 
+    if(!clearNetworks()) return false;
+  }
 
   JsonObject n = arr.createNestedObject();
   n["ssid"] = ssid;

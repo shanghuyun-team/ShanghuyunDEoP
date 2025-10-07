@@ -1,6 +1,6 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
-    android:padding="16dp"
+    android:padding="10dp"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -32,19 +32,19 @@
         android:layout_height="wrap_content"/>
 
     <LinearLayout
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
         <Button
             android:id="@+id/btnRecStart"
             android:text="錄音開始"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_weight="1"
             android:layout_height="wrap_content"/>
         <Button
             android:id="@+id/btnRecStop"
             android:text="錄音停止"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_weight="1"
             android:layout_height="wrap_content"/>
     </LinearLayout>
@@ -52,38 +52,44 @@
     <TextView
         android:text="播放控制"
         android:textStyle="bold"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="30dp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>
-
+    <TextView
+        android:text="播放次數 (空白 = 循環播放)"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
     <EditText
         android:id="@+id/etCount"
-        android:hint="count（空或0=無限）"
+        android:hint="播放次數 (空白 = 循環播放)"
         android:inputType="number"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"/>
-
+    <TextView
+        android:text="間隔時間 (單位ms=0.001秒, 最小值:250)"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
     <EditText
         android:id="@+id/etInterval"
-        android:hint="interval_ms (>=250, 預設10000)"
+        android:text="1000"
         android:inputType="number"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"/>
 
     <LinearLayout
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
         <Button
             android:id="@+id/btnPlayStart"
             android:text="播放開始"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_weight="1"
             android:layout_height="wrap_content"/>
         <Button
             android:id="@+id/btnPlayStop"
             android:text="播放停止"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_weight="1"
             android:layout_height="wrap_content"/>
     </LinearLayout>

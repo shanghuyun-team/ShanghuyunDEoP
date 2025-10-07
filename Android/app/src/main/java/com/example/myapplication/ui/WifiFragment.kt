@@ -29,11 +29,9 @@ class WifiFragment : Fragment(R.layout.fragment_wifi) {
         val etDelSsid = view.findViewById<EditText>(R.id.etDelSsid)
 
         val btnList = view.findViewById<Button>(R.id.btnList)
-        val btnAdd = view.findViewById<Button>(R.id.btnAdd)
         val btnSet = view.findViewById<Button>(R.id.btnSet)
         val btnDel = view.findViewById<Button>(R.id.btnDel)
         val btnClear = view.findViewById<Button>(R.id.btnClear)
-        val btnApply = view.findViewById<Button>(R.id.btnApply)
         val tvAck = view.findViewById<TextView>(R.id.tvAck)
         val tvList = view.findViewById<TextView>(R.id.tvList)
         val tvStatus = view.findViewById<TextView>(R.id.tvStatus)
@@ -60,11 +58,9 @@ class WifiFragment : Fragment(R.layout.fragment_wifi) {
 
         // Wi-Fi 指令操作
         btnList.setOnClickListener { vm.wifiList() }
-        btnAdd.setOnClickListener { vm.wifiAdd(etSsid.text.toString(), etPwd.text.toString()) }
         btnSet.setOnClickListener { vm.wifiSet(etSsid.text.toString(), etPwd.text.toString()) }
         btnDel.setOnClickListener { vm.wifiDel(etDelSsid.text.toString()) }
         btnClear.setOnClickListener { vm.wifiClear() }
-        btnApply.setOnClickListener { vm.wifiApply() }
 
         // 觀察 ACK 與 Wi-Fi 列表
         // 狀態列

@@ -22,7 +22,6 @@ class LedFragment : Fragment(R.layout.fragment_led) {
         val sbG = view.findViewById<SeekBar>(R.id.sbG)
         val sbB = view.findViewById<SeekBar>(R.id.sbB)
         val btnSetColor = view.findViewById<Button>(R.id.btnSetColor)
-        val btnSolid = view.findViewById<Button>(R.id.btnSolid)
         val btnRainbow = view.findViewById<Button>(R.id.btnRainbow)
         val btnOff = view.findViewById<Button>(R.id.btnOff)
         val tvAck = view.findViewById<TextView>(R.id.tvAck)
@@ -52,7 +51,6 @@ class LedFragment : Fragment(R.layout.fragment_led) {
         btnSetColor.setOnClickListener {
             vm.ledSetColor(sbR.progress, sbG.progress, sbB.progress)
         }
-        btnSolid.setOnClickListener { vm.ledSetMode("solid") }
         btnRainbow.setOnClickListener { vm.ledSetMode("rainbow") }
         btnOff.setOnClickListener { vm.ledSetMode("off") }
 

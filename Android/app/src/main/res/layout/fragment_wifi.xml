@@ -1,7 +1,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp">
+    android:padding="10dp">
 
     <LinearLayout
         android:orientation="vertical"
@@ -87,33 +87,37 @@
             android:layout_height="wrap_content">
             <Button
                 android:id="@+id/btnList"
-                android:text="列出(list)"
+                android:text="列出可用WIFI名稱(list)"
                 android:layout_width="0dp"
                 android:layout_weight="1"
-                android:layout_height="wrap_content"/>
-            <Button
-                android:id="@+id/btnClear"
-                android:text="清除(clear)"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="wrap_content"/>
+                android:layout_height="wrap_content"
+                android:layout_marginRight="10dp"/>
+
         </LinearLayout>
 
         <TextView
             android:id="@+id/tvList"
             android:text="(尚未載入)"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"/>
+            android:layout_height="wrap_content"/>
 
+        <TextView
+            android:layout_marginTop="30dp"
+            android:text="WIFI 名稱(SSID)"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
         <EditText
             android:id="@+id/etSsid"
-            android:hint="SSID"
+            android:hint="WIFI 名稱(SSID)"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+        <TextView
+            android:text="WIFI 密碼"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"/>
         <EditText
             android:id="@+id/etPwd"
-            android:hint="密碼"
+            android:hint="WIFI 密碼"
             android:inputType="textPassword"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"/>
@@ -122,26 +126,25 @@
             android:orientation="horizontal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
-            <Button
-                android:id="@+id/btnAdd"
-                android:text="新增(add)"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="wrap_content"/>
+
             <Button
                 android:id="@+id/btnSet"
-                android:text="更新(set)"
+                android:text="連線(Connect)"
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:layout_height="wrap_content"/>
         </LinearLayout>
 
+        <TextView
+            android:layout_marginTop="30dp"
+            android:text="要刪除的 WIFI名稱(SSID"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
         <EditText
             android:id="@+id/etDelSsid"
-            android:hint="要刪除的 SSID"
+            android:hint="要刪除的 WIFI名稱(SSID)"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"/>
+            android:layout_height="wrap_content"/>
 
         <LinearLayout
             android:orientation="horizontal"
@@ -153,13 +156,12 @@
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:layout_height="wrap_content"/>
-            <Button
-                android:id="@+id/btnApply"
-                android:text="套用(apply)"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="wrap_content"/>
         </LinearLayout>
+        <Button
+            android:id="@+id/btnClear"
+            android:text="清除全部設定(clear)"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
 
         <TextView
             android:id="@+id/tvAck"
